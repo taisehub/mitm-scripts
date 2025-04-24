@@ -4,10 +4,11 @@ import sqlite3
 import base64
 import os
 import json
+import subprocess
 
 class Reflector:
     def __init__(self):
-        self.allowed_domain = ""
+        self.target_domain = ""
         self.db_path = ""
 
     def load(self, loader: addonmanager.Loader):
@@ -19,15 +20,16 @@ class Reflector:
         )
 
     def configure(self, updated):
-        self.allowed_domain = ctx.options.reflector_target
-        if not self.allowed_domain:
+        self.target_domain = ctx.options.reflector_target
+        if not self.target_domain:
             ctx.log.error("reflector_target must be specified via --set.")
             return
 
-        safe_name = self.allowed_domain.replace('.', '_')
+        safe_name = self.target_domain.replace('.', '_')
         self.db_path = f"/tmp/scan_jobs_{safe_name}.db"
         self._init_db()
-        ctx.log.info(f"Reflector DB initialized for domain: {self.allowed_domain}")
+        ctx.log.info(f"Reflector DB initialized for domain: {self.target_domain}")
+        print("success configure reflector")
 
     def _init_db(self):
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
@@ -53,7 +55,7 @@ class Reflector:
 
     def request(self, flow: http.HTTPFlow):
         parsed = urlparse(flow.request.pretty_url)
-        if not parsed.hostname or not parsed.hostname.endswith(self.allowed_domain):
+        if not parsed.hostname or not parsed.hostname.endswith(self.target_domain):
             return
 
         method = flow.request.method
@@ -90,3 +92,7 @@ class Reflector:
 addons = [
     Reflector()
 ]
+
+if __name__ == "__main__":
+    print("Usage: mitmproxy --scripts reflector.py --set reflector_target=facebook.com")
+    sys.exit(0)

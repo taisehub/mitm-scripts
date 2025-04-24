@@ -12,6 +12,7 @@ class JsTracker:
     def configure(self, updated):
         domains = ctx.options.js_tracker_domains
         self.allowed_domains = set(domain.strip() for domain in domains.split(",") if domain.strip())
+        print("success configure js_tracker")
 
     def response(self, flow: http.HTTPFlow) -> None:
         url = flow.request.pretty_url

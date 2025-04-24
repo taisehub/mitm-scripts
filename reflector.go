@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -201,11 +203,11 @@ func sendRequestAndCheckReflection(req *Request) error {
 		request.Header.Set(key, value)
 	}
 
-	proxyURL, _ := url.Parse("http://localhost:8080")
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(proxyURL),
-	}
-	client.Transport = transport
+	// proxyURL, _ := url.Parse("http://localhost:8080")
+	// transport := &http.Transport{
+	// 	Proxy: http.ProxyURL(proxyURL),
+	// }
+	// client.Transport = transport
 
 	resp, err := client.Do(request)
 	if err != nil {
@@ -234,11 +236,22 @@ func isReflected(resp *http.Response, canary string) bool {
 		return false
 	}
 
-	if strings.Contains(string(body), canary) {
-		return true
-	}
+	// GZIP
+	if body[0] == 31 && body[1] == 139 {
+		gzipReader, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			fmt.Println("Failed to create gzip reader:", err)
+			return false
+		}
+		defer gzipReader.Close()
 
-	return false
+		body, err = io.ReadAll(gzipReader)
+		if err != nil {
+			fmt.Println("Failed to decompress body:", err)
+			return false
+		}
+	}
+	return strings.Contains(string(body), canary)
 }
 
 func parseHeaders(headers string) map[string]string {
@@ -260,6 +273,7 @@ func parseCookies(cookies string) map[string]string {
 }
 
 func dumpreq(resp *http.Response) {
+	fmt.Println("dumpreqdumpreqdumpreqdumpreqdumpreqdumpreqdumpreqdumpreqdumpreqdumpreq")
 	f, err := os.OpenFile("information.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
