@@ -1,0 +1,63 @@
+GET /?xxx=xxxkensakensakensakensa%27%22%3C%3E HTTP/1.1
+Sec-Ch-Ua-Mobile: ?0
+Sec-Fetch-Site: none
+Connection: keep-alive
+Host: app.inugasky.net
+Accept-Language: ja,en-US;q=0.9,en;q=0.8
+Sec-Fetch-Dest: document
+Cookie: xx=yyy; zzz=gggg
+Sec-Fetch-Mode: navigate
+Sec-Ch-Ua-Platform: "macOS"
+Accept-Encoding: gzip, deflate, br, zstd
+Sec-Fetch-User: ?1
+Sec-Ch-Ua: "Not?A_Brand";v="99", "Chromium";v="130"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+
+
+
+=======================================
+
+GET /?xxx=xxx HTTP/1.1
+Connection: keep-alive
+Sec-Fetch-User: ?1
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36
+Sec-Fetch-Site: none
+Sec-Ch-Ua-Platform: "macOS"
+Sec-Fetch-Mode: navigate
+Sec-Ch-Ua: "Not?A_Brand";v="99", "Chromium";v="130"
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Cookie: xx=yyykensakensakensakensa'"<>;  zzz=gggg
+Sec-Fetch-Dest: document
+Host: app.inugasky.net
+Sec-Ch-Ua-Mobile: ?0
+Accept-Encoding: gzip, deflate, br, zstd
+Upgrade-Insecure-Requests: 1
+Accept-Language: ja,en-US;q=0.9,en;q=0.8
+
+
+
+=======================================
+
+GET /?xxx=xxx HTTP/1.1
+Sec-Ch-Ua-Mobile: ?0
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Connection: keep-alive
+Sec-Fetch-Mode: navigate
+Sec-Ch-Ua: "Not?A_Brand";v="99", "Chromium";v="130"
+Accept-Encoding: gzip, deflate, br, zstd
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Ch-Ua-Platform: "macOS"
+Host: app.inugasky.net
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36
+Accept-Language: ja,en-US;q=0.9,en;q=0.8
+Sec-Fetch-Site: none
+Cookie: xx=yyy;  zzz=ggggkensakensakensakensa'"<>
+Upgrade-Insecure-Requests: 1
+
+
+
+=======================================
+
