@@ -1,5 +1,5 @@
 from mitmproxy import http, ctx, addonmanager
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 import sqlite3
 import base64
 import os
@@ -44,10 +44,10 @@ class Reflector:
                 path TEXT,
                 query TEXT,
                 headers TEXT,
-                cookies TEXT,
                 body TEXT,
-                status TEXT DEFAULT 'queued',
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                status TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(host, path) -- Ensure host and path combination is unique
             )
         ''')
         conn.commit()
@@ -64,32 +64,74 @@ class Reflector:
         path = parsed.path
         query = parsed.query
         headers = dict(flow.request.headers)
-        cookies = dict(flow.request.cookies.fields)
         body = flow.request.get_text()
+
+        # Combine all cookie headers into a single string separated by "; "
+        if "cookie" in headers:
+            cookies = []
+            for key, value in flow.request.headers.items():
+                if key.lower() == "cookie":
+                    # Replace ", " with "; " in the cookie string
+                    value = value.decode("utf-8") if isinstance(value, bytes) else value
+                    cookies.append(value.replace(", ", "; "))
+            headers["cookie"] = "; ".join(cookies)
 
         try:
             conn = sqlite3.connect(self.db_path)
             c = conn.cursor()
-            c.execute('''
-                INSERT INTO jobs (method, host, port, path, query, headers, cookies, body)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                method,
-                host,
-                port,
-                path,
-                query,
-                json.dumps(headers),
-                json.dumps(cookies),
-                body
-            ))
+
+            # Check if the host and path combination already exists
+            c.execute('SELECT query FROM jobs WHERE host = ? AND path = ?', (host, path))
+            existing_query = c.fetchone()
+
+            if existing_query:
+                existing_query_dict = parse_qs(existing_query[0])
+                new_query_dict = parse_qs(query)
+
+                # Check if the new query is the same as the existing query
+                if existing_query_dict == new_query_dict:
+                    return
+
+                # Merge the existing query parameters with the new ones
+                merged_query = {**existing_query_dict, **new_query_dict}
+                merged_query_str = urlencode(merged_query, doseq=True)
+
+                # Update the existing record with the merged query
+                c.execute('''
+                    UPDATE jobs
+                    SET query = ?, headers = ?, body = ?, status = 'queued', timestamp = CURRENT_TIMESTAMP
+                    WHERE host = ? AND path = ?
+                ''', (
+                    merged_query_str,
+                    json.dumps(headers),
+                    body,
+                    host,
+                    path
+                ))
+                ctx.log.info(f"[UPDATED] {flow.request.pretty_url}")
+            else:
+                # Insert a new record
+                c.execute('''
+                    INSERT INTO jobs (method, host, port, path, query, headers, body, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    method,
+                    host,
+                    port,
+                    path,
+                    query,
+                    json.dumps(headers),
+                    body,
+                    "queued"
+                ))
+                ctx.log.info(f"[ENQUEUED] {flow.request.pretty_url}")
+
             conn.commit()
             conn.close()
-            ctx.log.info(f"[ENQUEUED] {flow.request.pretty_url}")
         except Exception as e:
-            ctx.log.error(f"[DB ERROR] {str(e)}")
-
-addons = [
+if __name__ == "__main__":f"[DB ERROR] {str(e)}")
+    print("Usage: mitmproxy --scripts reflector.py --set reflector_target=facebook.com")
+    sys.exit(0)
     Reflector()
 ]
 

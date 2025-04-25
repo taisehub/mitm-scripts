@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,6 +24,24 @@ import (
 const (
 	canary = "kensakensakensakensa"
 )
+
+// Embed the wordlist file
+//
+//go:embed query.txt
+var queryWordlist string
+
+func getWordlist() []string {
+	// Split the embedded wordlist content into lines
+	lines := strings.Split(queryWordlist, "\n")
+	var wordlist []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			wordlist = append(wordlist, trimmed)
+		}
+	}
+	return wordlist
+}
 
 type Request struct {
 	Method  string
@@ -59,8 +78,8 @@ func main() {
 			continue
 		}
 
-		if err := deleteJobFromDB(job.ID); err != nil {
-			log.Println("Error deleting job from DB:", err)
+		if err := markJobAsFinished(job.ID); err != nil {
+			log.Println("Error marking job as finished in DB:", err)
 		}
 
 		log.Printf("Scanning: https://%s%s?%s\n", job.Req.Host, job.Req.Path, job.Req.Query)
@@ -108,22 +127,27 @@ func getJobFromDB() (*Job, error) {
 	return &Job{ID: id, Req: req}, nil
 }
 
-func deleteJobFromDB(jobID int) error {
+func markJobAsFinished(jobID int) error {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("DELETE FROM jobs WHERE id = ?", jobID)
+	_, err = db.Exec("UPDATE jobs SET status = 'finished' WHERE id = ?", jobID)
 	return err
 }
 
 func scanRequest(req *Request) error {
-	if err := checkReflectionInQueryParams(req); err != nil {
-		return err
+	if req.Method == "GET" {
+		if err := checkReflectionInQueryParams(req); err != nil {
+			return err
+		}
+		return checkReflectionInCookies(req)
+	} else {
+		// TOD: implement other HTTP methods
+		return nil
 	}
-	return checkReflectionInCookies(req)
 }
 
 func checkReflectionInQueryParams(req *Request) error {
@@ -131,6 +155,9 @@ func checkReflectionInQueryParams(req *Request) error {
 	if err != nil {
 		return err
 	}
+
+	// Get the wordlist for brute-forcing
+	wordlist := getWordlist()
 
 	// Create a buffered channel to limit concurrency to 5
 	concurrencyLimit := 5
@@ -140,6 +167,7 @@ func checkReflectionInQueryParams(req *Request) error {
 	var mu sync.Mutex
 	var firstError error
 
+	// Test existing query parameters
 	for key := range queryParams {
 		wg.Add(1)
 		sem <- struct{}{} // Acquire a slot in the semaphore
@@ -159,6 +187,35 @@ func checkReflectionInQueryParams(req *Request) error {
 		}(key)
 	}
 
+	// Brute-force additional query parameters in batches
+	batchSize := 50
+	for i := 0; i < len(wordlist); i += batchSize {
+		end := i + batchSize
+		if end > len(wordlist) {
+			end = len(wordlist)
+		}
+
+		batch := wordlist[i:end]
+
+		wg.Add(1)
+		sem <- struct{}{} // Acquire a slot in the semaphore
+
+		go func(batch []string) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release the slot when done
+
+			// Add the batch of brute-forced parameters to the request
+			modifiedReq := addBruteForceParamsBatch(req, batch)
+			if err := sendRequestAndCheckReflection(&modifiedReq, strings.Join(batch, ",")); err != nil {
+				mu.Lock()
+				if firstError == nil {
+					firstError = err
+				}
+				mu.Unlock()
+			}
+		}(batch)
+	}
+
 	wg.Wait() // Wait for all goroutines to finish
 	return firstError
 }
@@ -176,6 +233,21 @@ func modifyQueryParam(req *Request, queryParams url.Values, key string) Request 
 
 	modifiedReq := *req
 	modifiedReq.Query = modifiedQuery.Encode()
+	return modifiedReq
+}
+
+func addBruteForceParamsBatch(req *Request, params []string) Request {
+	// Parse the existing query parameters
+	queryParams, _ := url.ParseQuery(req.Query)
+
+	// Add the batch of brute-forced parameters with a canary value
+	for _, param := range params {
+		queryParams.Set(param, canary+`'"<>`)
+	}
+
+	// Create a modified request with the new query parameters
+	modifiedReq := *req
+	modifiedReq.Query = queryParams.Encode()
 	return modifiedReq
 }
 
@@ -269,6 +341,10 @@ func sendRequestAndCheckReflection(req *Request, testingParam string) error {
 			return http.ErrUseLastResponse
 		},
 	}
+	proxyURL, _ := url.Parse("http://localhost:8082")
+	client.Transport = &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
+	}
 
 	fullURL := "https://" + req.Host + req.Path
 
@@ -287,6 +363,11 @@ func sendRequestAndCheckReflection(req *Request, testingParam string) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	// Handle 101 Switching Protocols
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		return nil
+	}
 
 	// Detect vulnerabilities
 	vulnType := detect(request, resp, testingParam)
